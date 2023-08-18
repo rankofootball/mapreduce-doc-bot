@@ -53,7 +53,7 @@ export default async function handler(
   
 
   console.log('\nquestion', question);
-  const model = new ChatOpenAI({batch_size: 100,
+  const model = new ChatOpenAI({
     temperature: 0, // increase temepreature to get more creative answers
     modelName: 'gpt-4', //change this to gpt-4 if you have access
   });
