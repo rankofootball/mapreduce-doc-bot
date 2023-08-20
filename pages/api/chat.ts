@@ -11,6 +11,7 @@ import { ChatOpenAI } from 'langchain/chat_models/openai';
 import { LLMChain } from "langchain/chains";
 import { RetrievalQAChain, loadQAMapReduceChain , loadQAChain } from 'langchain/chains';
 import { PromptTemplate } from "langchain/prompts";
+import { OpenAI } from 'langchain/llms/openai';
 
 const maxChunks = 30;   // how many chunks to iterate through 
 // aux function
@@ -72,16 +73,19 @@ export default async function handler(
    'FACT'}
    {'Prompt': 'In which month was the law passed?', 
    'FACT'}
-   {'Prompt': 'How many documents does the corpus contain?', 
+  {'Prompt': 'How many documents does the corpus contain?', 
    'META 
    MAP:  Check whether the context is the beginning of a document. This could for instance be clear from a title or some other parts of a document header. In this case, write 'Yes' into the output.
  REDUCE: Count the number of times a 'Yes' appears in the input. Output this number.}
+ {'Prompt': 'Which media have been discussing this issue?', 
+   'META 
+   MAP:  Check whether the context mentions any media related to the issue contained in the chat. If so list the media. 
+ REDUCE: Prepare and output a list of mentioned media discussing this issue in the chat. Remove duplicates.}
  {'Prompt': 'Which authors are mentioned?', 
     'META 
-    MAP:  Identify and list all the unique authors mentioned in the text chunk.
+    MAP:  Identify and list all the authors mentioned in the text chunk.
     REDUCE: Combine all the unique authors from each text chunk into a single list, removing any duplicates.  Try to bring the format of all names into the same standard form.}
   
-
   Input question: 
   `
 
@@ -113,10 +117,11 @@ export default async function handler(
  
     });
   
-    // pipe question into main model
+    // pipe supervisor question into main model
     let response = await chainMain.call({
         text:  sanitizedQuestion,
-        chat_history: history || [], });
+//        chat_history: history || [],
+       });
   
     let responseText: string = response.text;
     console.log("Supervisor reply:",responseText)
@@ -126,11 +131,11 @@ export default async function handler(
     console.log(firstFourChars)
     //let recursivePrompt: string = responseText.slice(5, -1);
     // Evaluate either fact or meta 
-    if (firstFourChars === 'FACT' ) {
+    if (firstFourChars === 'FACT' || firstFourChars === `'FACT` ) {
         // Run a normal command here
         console.log("The first four characters are 'FACT', running the command now...");
         const chain = makeChain(vectorStore);
-
+        console.log("question: ",question)
         const response = await chain.call({
           question: question.trim().replaceAll('\n', ' '),
           chat_history: history || [],
@@ -142,7 +147,7 @@ export default async function handler(
     else {
         console.log("The first four characters are 'META'");
         // run a meta command here
-        const llm1 = new ChatOpenAI({ maxConcurrency: 100 ,
+        const llm1 = new OpenAI({ maxConcurrency: 3 , batchSize: 100,   //ChatOpenAI not working in batch mode
           temperature: 0, // increase temepreature to get more creative answers
           modelName: 'gpt-3.5-turbo', //change this to gpt-4 if you have access otherwise gpt-3.5-turbo
         });
